@@ -13,7 +13,9 @@ COLORS = {
     '800 EP3': '#e67e22',  # Orange
     '800 EP4': '#c0392b',  # Red
     '820 EP2': '#00f2c3',  # Teal/Cyan (Distinctive for 820)
-    'TOTAL': '#ffffff',    # White for total
+    '800 K1':  '#9b59b6',  # Purple
+    '820 K1':  '#f1c40f',  # Yellow
+    'TOTAL': '#ffffff',    # White for total lines
     'ACCENT': '#FFD700'    # Gold/Yellow for accent marks
 }
 
@@ -22,12 +24,16 @@ TOTAL_CAP = {
     '820': {'K1': 432, 'EP1': 0, 'EP2': 474, 'EP3': 0, 'EP4': 0}
 }
 
-# Calculate Grand Total EP Capacity (Pallets only)
+# Calculate Grand Total Capacities
 GRAND_TOTAL_EP_CAP = 0
+GRAND_TOTAL_K1_CAP = 0
+
 for wh in TOTAL_CAP:
     for t, cap in TOTAL_CAP[wh].items():
         if 'EP' in t:
             GRAND_TOTAL_EP_CAP += cap
+        elif 'K1' in t:
+            GRAND_TOTAL_K1_CAP += cap
 
 # Factory Reset Data (Oct 2025 - Feb 2026)
 @st.cache_data
@@ -199,7 +205,7 @@ common_layout = dict(
     yaxis=dict(
         showgrid=True, gridwidth=1, gridcolor='rgba(128, 128, 128, 0.2)', griddash='dot',
         zeroline=False, showline=True, linewidth=1, linecolor='rgba(128, 128, 128, 0.5)',
-        title="Number of Free Slots"
+        title="Number of Free Bins"
     ),
     font=dict(family="Arial, sans-serif", size=12, color="#e0e0e0")
 )
@@ -207,7 +213,7 @@ common_layout = dict(
 col1, col2 = st.columns(2)
 
 with col1:
-    # --- GRAF 1: PALLET POSITIONS (Polished) ---
+    # --- GRAF 1: PALLET POSITIONS (Master) ---
     fig_ep = go.Figure()
     
     # 1. Individual Lines with Markers
@@ -256,7 +262,7 @@ with col1:
     latest_total_free = ep_total_df[ep_total_df['Date'] == latest_date]['Free_Bins'].values[0]
     latest_pct_free = (latest_total_free / GRAND_TOTAL_EP_CAP) * 100
     
-    # Polished Static Annotation Box
+    # Static Annotation Box
     fig_ep.add_annotation(
         x=latest_date, 
         y=latest_total_free,
@@ -269,7 +275,7 @@ with col1:
         ax=-120,
         ay=-50,
         font=dict(color="white", size=13),
-        bgcolor="rgba(40, 40, 40, 0.85)", # Semi-transparent dark background
+        bgcolor="rgba(40, 40, 40, 0.85)", 
         bordercolor=COLORS['TOTAL'],
         borderwidth=2,
         borderpad=6,
@@ -279,10 +285,10 @@ with col1:
     st.plotly_chart(fig_ep, use_container_width=True)
 
 with col2:
-    # --- GRAF 2: K1 COMPARISON (Polished) ---
+    # --- GRAF 2: KLT/K1 COMPARISON (Master) ---
     fig_k1 = go.Figure()
-    colors_k1 = {'800 K1': COLORS['800 EP2'], '820 K1': COLORS['820 EP2']} # Reuse existing colors
-
+    
+    # 1. Individual Lines
     for wh in ['800', '820']:
         sub = df[(df['WH'] == wh) & (df['Type'] == 'K1')]
         key = f"{wh} K1"
@@ -290,20 +296,50 @@ with col2:
             x=sub['Date'], y=sub['Free_Bins'], 
             name=key,
             mode='lines+markers',
-            line=dict(width=3, color=colors_k1.get(key, '#ccc')),
+            line=dict(width=3, color=COLORS.get(key, '#ccc')),
             marker=dict(size=7)
         ))
+        
+    # 2. Total KLT Line (Bold & White)
+    k1_total_df = df[df['Type'] == 'K1'].groupby('Date')['Free_Bins'].sum().reset_index()
+    k1_total_df['Pct_Free'] = (k1_total_df['Free_Bins'] / GRAND_TOTAL_K1_CAP) * 100
     
-    fig_k1.update_layout(title="<b>Evolution of Free Shelf Positions (K1)</b>", **common_layout)
+    fig_k1.add_trace(go.Scatter(
+        x=k1_total_df['Date'], 
+        y=k1_total_df['Free_Bins'], 
+        name="TOTAL KLT", 
+        mode='lines+markers',
+        line=dict(color=COLORS['TOTAL'], width=4),
+        marker=dict(size=8, color=COLORS['TOTAL'], line=dict(width=1, color='#333')),
+        hovertemplate="<b>TOTAL: %{y} free</b><br>(%{text:.1f}% of Capacity)<extra></extra>",
+        text=k1_total_df['Pct_Free']
+    ))
+    
+    fig_k1.update_layout(title="<b>Evolution of KLT Bins (Details + Total)</b>", **common_layout)
     
     # Vertical Line & Annotation for Latest Date
     fig_k1.add_vline(x=latest_date, line_width=2, line_dash="dot", line_color=COLORS['ACCENT'])
+    
+    # Calculate latest stats for annotation
+    latest_k1_free = k1_total_df[k1_total_df['Date'] == latest_date]['Free_Bins'].values[0]
+    latest_k1_pct = (latest_k1_free / GRAND_TOTAL_K1_CAP) * 100
+    
     fig_k1.add_annotation(
-        x=latest_date, y=1, yref='paper', 
-        text="<b>Latest Status</b>", 
-        showarrow=False, 
-        font=dict(color=COLORS['ACCENT'], size=12),
-        bgcolor="rgba(40, 40, 40, 0.7)",
-        borderpad=4
+        x=latest_date, 
+        y=latest_k1_free,
+        text=f"<b>TOTAL: {latest_k1_free}</b><br>({latest_k1_pct:.1f}% Free)",
+        showarrow=True,
+        arrowhead=2,
+        arrowsize=1,
+        arrowwidth=2,
+        arrowcolor=COLORS['ACCENT'],
+        ax=-120,
+        ay=-50,
+        font=dict(color="white", size=13),
+        bgcolor="rgba(40, 40, 40, 0.85)", 
+        bordercolor=COLORS['TOTAL'],
+        borderwidth=2,
+        borderpad=6,
+        align="center"
     )
     st.plotly_chart(fig_k1, use_container_width=True)
