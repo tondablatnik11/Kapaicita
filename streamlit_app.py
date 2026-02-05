@@ -6,6 +6,17 @@ import re
 # --- CONFIGURATION & THEME ---
 st.set_page_config(page_title="Logistics Intel: Tue/Thu Report", layout="wide")
 
+# Definice barev pro konzistentní vzhled
+COLORS = {
+    '800 EP1': '#3498db',  # Blue
+    '800 EP2': '#2980b9',  # Darker Blue
+    '800 EP3': '#e67e22',  # Orange
+    '800 EP4': '#c0392b',  # Red
+    '820 EP2': '#00f2c3',  # Teal/Cyan (Distinctive for 820)
+    'TOTAL': '#ffffff',    # White for total
+    'ACCENT': '#FFD700'    # Gold/Yellow for accent marks
+}
+
 TOTAL_CAP = {
     '800': {'K1': 4540, 'EP1': 228, 'EP2': 2367, 'EP3': 231, 'EP4': 25},
     '820': {'K1': 432, 'EP1': 0, 'EP2': 474, 'EP3': 0, 'EP4': 0}
@@ -174,70 +185,125 @@ st.info("💡 Copy the block above directly into your email client.")
 st.divider()
 st.subheader("📊 Graphs for Export (Screenshot these)")
 
+# Spolecne nastaveni layoutu pro oba grafy
+common_layout = dict(
+    height=450,
+    margin=dict(l=20, r=20, t=60, b=20),
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    plot_bgcolor='rgba(30, 30, 30, 0.5)', # Lehce svetlejsi pozadi grafu
+    paper_bgcolor='rgba(0,0,0,0)',
+    xaxis=dict(
+        showgrid=True, gridwidth=1, gridcolor='rgba(128, 128, 128, 0.2)', griddash='dot',
+        zeroline=False, showline=True, linewidth=1, linecolor='rgba(128, 128, 128, 0.5)'
+    ),
+    yaxis=dict(
+        showgrid=True, gridwidth=1, gridcolor='rgba(128, 128, 128, 0.2)', griddash='dot',
+        zeroline=False, showline=True, linewidth=1, linecolor='rgba(128, 128, 128, 0.5)',
+        title="Number of Free Slots"
+    ),
+    font=dict(family="Arial, sans-serif", size=12, color="#e0e0e0")
+)
+
 col1, col2 = st.columns(2)
 
 with col1:
-    # 2-in-1 Graph: Pallet Details + Total Pallet Summary
+    # --- GRAF 1: PALLET POSITIONS (Polished) ---
     fig_ep = go.Figure()
     
-    # 1. Individual Lines
+    # 1. Individual Lines with Markers
     for ep in ['EP1', 'EP2', 'EP3', 'EP4']:
         sub = df[(df['WH'] == '800') & (df['Type'] == ep)]
-        fig_ep.add_trace(go.Scatter(x=sub['Date'], y=sub['Free_Bins'], name=f"800 {ep}", opacity=0.7))
+        color_key = f"800 {ep}"
+        fig_ep.add_trace(go.Scatter(
+            x=sub['Date'], y=sub['Free_Bins'], 
+            name=color_key, 
+            mode='lines+markers',
+            line=dict(width=2, color=COLORS.get(color_key, '#ccc')),
+            marker=dict(size=6),
+            opacity=0.8
+        ))
     
     sub820ep = df[(df['WH'] == '820') & (df['Type'] == 'EP2')]
-    fig_ep.add_trace(go.Scatter(x=sub820ep['Date'], y=sub820ep['Free_Bins'], name="820 EP2", line=dict(dash='dash', color='cyan')))
+    fig_ep.add_trace(go.Scatter(
+        x=sub820ep['Date'], y=sub820ep['Free_Bins'], 
+        name="820 EP2", 
+        mode='lines+markers',
+        line=dict(width=2, dash='dash', color=COLORS['820 EP2']),
+        marker=dict(size=6, symbol='diamond')
+    ))
     
-    # 2. Total Pallet Line
+    # 2. Total Pallet Line (Bold & White)
     ep_total_df = df[df['Type'].str.contains('EP')].groupby('Date')['Free_Bins'].sum().reset_index()
-    
-    # Custom Hover Template displaying percentage
     ep_total_df['Pct_Free'] = (ep_total_df['Free_Bins'] / GRAND_TOTAL_EP_CAP) * 100
     
     fig_ep.add_trace(go.Scatter(
         x=ep_total_df['Date'], 
         y=ep_total_df['Free_Bins'], 
         name="TOTAL Pallets", 
-        line=dict(color='white', width=4),
-        hovertemplate="<b>TOTAL: %{y} free bins</b><br>Available Capacity: %{text:.1f}%<extra></extra>",
+        mode='lines+markers',
+        line=dict(color=COLORS['TOTAL'], width=4),
+        marker=dict(size=8, color=COLORS['TOTAL'], line=dict(width=1, color='#333')),
+        hovertemplate="<b>TOTAL: %{y} free</b><br>(%{text:.1f}% of Capacity)<extra></extra>",
         text=ep_total_df['Pct_Free']
     ))
     
-    fig_ep.update_layout(title="Evolution of Pallet Positions (Details + Total)", height=400, margin=dict(l=0,r=0,t=40,b=0))
+    fig_ep.update_layout(title="<b>Evolution of Pallet Positions (Details + Total)</b>", **common_layout)
     
-    # FIXED: Separate annotation from add_vline to avoid TypeError on Timestamps
-    fig_ep.add_vline(x=latest_date, line_width=2, line_dash="dot", line_color="#F4D03F")
+    # Vertical Line for Latest Date
+    fig_ep.add_vline(x=latest_date, line_width=2, line_dash="dot", line_color=COLORS['ACCENT'])
     
-    # Calculate percentage for the latest date for static annotation
+    # Calculate latest stats for annotation
     latest_total_free = ep_total_df[ep_total_df['Date'] == latest_date]['Free_Bins'].values[0]
     latest_pct_free = (latest_total_free / GRAND_TOTAL_EP_CAP) * 100
     
-    # Add Static Annotation for Screenshot (Visible without hovering)
+    # Polished Static Annotation Box
     fig_ep.add_annotation(
         x=latest_date, 
         y=latest_total_free,
-        text=f"TOTAL: {latest_total_free} ({latest_pct_free:.1f}% Free)",
+        text=f"<b>TOTAL: {latest_total_free}</b><br>({latest_pct_free:.1f}% Free)",
         showarrow=True,
-        arrowhead=1,
-        ax=-100,
-        ay=-40,
-        font=dict(color="white", size=12),
-        bgcolor="#F4D03F",
-        bordercolor="white",
-        borderwidth=1
+        arrowhead=2,
+        arrowsize=1,
+        arrowwidth=2,
+        arrowcolor=COLORS['ACCENT'],
+        ax=-120,
+        ay=-50,
+        font=dict(color="white", size=13),
+        bgcolor="rgba(40, 40, 40, 0.85)", # Semi-transparent dark background
+        bordercolor=COLORS['TOTAL'],
+        borderwidth=2,
+        borderpad=6,
+        align="center"
     )
     
     st.plotly_chart(fig_ep, use_container_width=True)
 
 with col2:
-    # Graf 2: K1 Comparison (800 K1 vs 820 K1)
+    # --- GRAF 2: K1 COMPARISON (Polished) ---
     fig_k1 = go.Figure()
+    colors_k1 = {'800 K1': COLORS['800 EP2'], '820 K1': COLORS['820 EP2']} # Reuse existing colors
+
     for wh in ['800', '820']:
         sub = df[(df['WH'] == wh) & (df['Type'] == 'K1')]
-        fig_k1.add_trace(go.Scatter(x=sub['Date'], y=sub['Free_Bins'], name=f"{wh} K1"))
+        key = f"{wh} K1"
+        fig_k1.add_trace(go.Scatter(
+            x=sub['Date'], y=sub['Free_Bins'], 
+            name=key,
+            mode='lines+markers',
+            line=dict(width=3, color=colors_k1.get(key, '#ccc')),
+            marker=dict(size=7)
+        ))
     
-    fig_k1.update_layout(title="Evolution of Free Shelf Positions (K1)", height=400, margin=dict(l=0,r=0,t=40,b=0))
-    # FIXED: Separate annotation from add_vline to avoid TypeError on Timestamps
-    fig_k1.add_vline(x=latest_date, line_width=2, line_dash="dot", line_color="#F4D03F")
-    fig_k1.add_annotation(x=latest_date, y=1.05, yref='paper', text="Latest Status", showarrow=False, font=dict(color="#F4D03F"))
+    fig_k1.update_layout(title="<b>Evolution of Free Shelf Positions (K1)</b>", **common_layout)
+    
+    # Vertical Line & Annotation for Latest Date
+    fig_k1.add_vline(x=latest_date, line_width=2, line_dash="dot", line_color=COLORS['ACCENT'])
+    fig_k1.add_annotation(
+        x=latest_date, y=1, yref='paper', 
+        text="<b>Latest Status</b>", 
+        showarrow=False, 
+        font=dict(color=COLORS['ACCENT'], size=12),
+        bgcolor="rgba(40, 40, 40, 0.7)",
+        borderpad=4
+    )
     st.plotly_chart(fig_k1, use_container_width=True)
