@@ -2,13 +2,11 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
-from datetime import datetime
 import re
 
-# --- CONFIGURATION & STYLING ---
-st.set_page_config(page_title="Logistics Intelligence Pro", layout="wide", initial_sidebar_state="expanded")
+# --- CONFIGURATION & THEME ---
+st.set_page_config(page_title="Logistics Intelligence Dashboard", layout="wide")
 
-# Custom CSS for a professional look
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
@@ -16,16 +14,16 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# Total Bins Capacity (Based on user management specifications)
 TOTAL_CAP = {
     '800': {'K1': 4540, 'EP1': 228, 'EP2': 2367, 'EP3': 231, 'EP4': 25},
     '820': {'K1': 432, 'EP1': 0, 'EP2': 474, 'EP3': 0, 'EP4': 0}
 }
 
-# --- DATA ENGINE ---
+# --- DATA ENGINE: HISTORICAL ARCHIVE ---
 @st.cache_data
-def load_historical_data():
-    # Všechna tvá historická data převedená do čistého formátu
-    raw = [
+def load_full_history():
+    hist_raw = [
         ('13.10.2025', '800', 'EP1', 1), ('13.10.2025', '800', 'EP2', 2), ('13.10.2025', '800', 'EP3', 43), ('13.10.2025', '800', 'EP4', 1), ('13.10.2025', '800', 'K1', 2036),
         ('13.10.2025', '820', 'EP1', 0), ('13.10.2025', '820', 'EP2', 205), ('13.10.2025', '820', 'EP3', 0), ('13.10.2025', '820', 'EP4', 0), ('13.10.2025', '820', 'K1', 226),
         ('16.10.2025', '800', 'K1', 1925), ('16.10.2025', '800', 'EP1', 0), ('16.10.2025', '800', 'EP2', 3), ('16.10.2025', '800', 'EP3', 1), ('16.10.2025', '800', 'EP4', 1),
@@ -81,24 +79,24 @@ def load_historical_data():
         ('22.01.2026', '800', 'K1', 1827), ('22.01.2026', '800', 'EP1', 13), ('22.01.2026', '800', 'EP2', 108), ('22.01.2026', '800', 'EP3', 59), ('22.01.2026', '800', 'EP4', 2),
         ('22.01.2026', '820', 'K1', 246), ('22.01.2026', '820', 'EP1', 0), ('22.01.2026', '820', 'EP2', 50), ('22.01.2026', '820', 'EP3', 0), ('22.01.2026', '820', 'EP4', 0),
     ]
-    df = pd.DataFrame(raw, columns=['Date', 'WH', 'Type', 'Free_Bins'])
+    df = pd.DataFrame(hist_raw, columns=['Date', 'WH', 'Type', 'Free_Bins'])
     df['Date'] = pd.to_datetime(df['Date'], dayfirst=True)
     return df
 
-# Initialize Session State
+# --- SESSION INITIALIZATION ---
 if 'data' not in st.session_state:
-    st.session_state.data = load_historical_data()
+    st.session_state.data = load_full_history()
 
 # --- APP LAYOUT ---
-st.title("🛡️ Logistics Intelligence Dashboard")
+st.title("🛡️ Logistics Intelligence Dashboard Pro")
 st.markdown("---")
 
-# Sidebar for Operations
+# Sidebar for Daily Operations (Management focus)
 with st.sidebar:
-    st.header("🛠️ Operations Center")
-    with st.expander("➕ Import Daily Data", expanded=False):
+    st.header("⚙️ Daily Operations")
+    with st.expander("📥 Import New Data Block", expanded=True):
         new_entry = st.text_area("Paste System Output:", height=200, placeholder="DD.MM.YYYY\n\n800\nK1 - ...")
-        if st.button("Process & Append Data"):
+        if st.button("🚀 Process & Append"):
             if new_entry:
                 date_match = re.search(r'(\d{2}\.\d{2}\.\d{4})', new_entry)
                 if date_match:
@@ -117,29 +115,30 @@ with st.sidebar:
                     if found_data:
                         new_df = pd.DataFrame(found_data)
                         st.session_state.data = pd.concat([st.session_state.data, new_df]).drop_duplicates(subset=['Date', 'WH', 'Type'], keep='last').sort_values('Date')
-                        st.success(f"Log: Records for {d_str} successfully merged.")
+                        st.success(f"Records for {d_str} successfully merged.")
                         st.rerun()
+                else:
+                    st.error("No valid date format found.")
     
     st.markdown("---")
-    st.download_button("📥 Export DB to CSV", st.session_state.data.to_csv(index=False).encode('utf-8'), "inventory_history.csv", "text/csv")
-    if st.button("🗑️ Reset to Factory History"):
-        st.session_state.data = load_historical_data()
+    st.download_button("📂 Backup History (CSV)", st.session_state.data.to_csv(index=False).encode('utf-8'), "warehouse_history.csv", "text/csv")
+    if st.button("♻️ Factory Reset History"):
+        st.session_state.data = load_full_history()
         st.rerun()
 
-# --- DASHBOARD LOGIC ---
+# --- KPI DASHBOARD ---
 df = st.session_state.data
 latest_date = df['Date'].max()
 prev_date = df[df['Date'] < latest_date]['Date'].max() if len(df['Date'].unique()) > 1 else latest_date
 
-# Executive KPI Section
-st.subheader(f"📊 Executive Summary (as of {latest_date.strftime('%d %b, %Y')})")
+st.subheader(f"📍 Real-time Inventory Status ({latest_date.strftime('%d %B, %Y')})")
 kpi1, kpi2, kpi3 = st.columns(3)
 
 def get_wh_stats(target_date, wh):
     subset = df[(df['Date'] == target_date) & (df['WH'] == wh)]
     total_cap = sum(TOTAL_CAP[wh].values())
     total_free = subset['Free_Bins'].sum()
-    occ = (1 - total_free/total_cap) * 100
+    occ = (1 - (total_free / total_cap)) * 100 if total_cap > 0 else 0
     return occ, total_free
 
 occ800, free800 = get_wh_stats(latest_date, '800')
@@ -148,91 +147,79 @@ occ820, free820 = get_wh_stats(latest_date, '820')
 occ820_old, _ = get_wh_stats(prev_date, '820')
 
 with kpi1:
-    st.metric("Warehouse 800 Occupancy", f"{occ800:.1f}%", f"{occ800 - occ800_old:+.1f}% vs last", delta_color="inverse")
+    st.metric("WH 800 Load", f"{occ800:.1f}%", f"{occ800 - occ800_old:+.1f}% vs last", delta_color="inverse")
 with kpi2:
-    st.metric("Warehouse 820 Occupancy", f"{occ820:.1f}%", f"{occ820 - occ820_old:+.1f}% vs last", delta_color="inverse")
+    st.metric("WH 820 Load", f"{occ820:.1f}%", f"{occ820 - occ820_old:+.1f}% vs last", delta_color="inverse")
 with kpi3:
-    total_occ = (occ800 + occ820) / 2 # Simple avg for high-level
-    st.metric("System-wide Load", f"{total_occ:.1f}%")
+    total_occ = (occ800 + occ820) / 2
+    st.metric("Global System Load", f"{total_occ:.1f}%")
 
 st.markdown("---")
 
-# Tabs for detailed analysis
-tab_trends, tab_forecast, tab_mail = st.tabs(["📈 Dynamic Trends", "🔮 Capacity Analytics", "📧 Managerial Export"])
+# --- TREND ANALYTICS ---
+tab_trends, tab_saturation, tab_mail = st.tabs(["📈 Interactive Trends", "📊 Capacity Analytics", "✉️ Email Export"])
 
 with tab_trends:
-    col_l, col_r = st.columns(2)
+    c_left, c_right = st.columns(2)
     
-    with col_l:
-        st.write("**Pallet Locations (EP Selection)**")
-        # Plotly Interactive Chart
+    with c_left:
+        st.markdown("**Pallet Storage (EP) Free Bins Trend**")
         fig_ep = go.Figure()
-        
-        # WH 800 EP
+        # WH 800 Pallets
         for ep in ['EP1', 'EP2', 'EP3', 'EP4']:
             sub = df[(df['WH'] == '800') & (df['Type'] == ep)]
             fig_ep.add_trace(go.Scatter(x=sub['Date'], y=sub['Free_Bins'], name=f"800 {ep}", mode='lines+markers'))
-            
         # WH 820 EP2
         sub820 = df[(df['WH'] == '820') & (df['Type'] == 'EP2')]
         fig_ep.add_trace(go.Scatter(x=sub820['Date'], y=sub820['Free_Bins'], name="820 EP2", line=dict(dash='dash', width=3, color='black')))
-        
-        fig_ep.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=450, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+        fig_ep.update_layout(height=450, margin=dict(l=0, r=0, t=20, b=0), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         st.plotly_chart(fig_ep, use_container_width=True)
 
-    with col_r:
-        st.write("**Shelf Locations (K1 Comparison)**")
-        fig_k1 = px.line(df[df['Type'] == 'K1'], x='Date', y='Free_Bins', color='WH', markers=True, 
-                         color_discrete_map={'800': '#1f77b4', '820': '#ff7f0e'})
-        fig_k1.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=450, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    with c_right:
+        st.markdown("**Shelf Storage (K1) Free Bins Comparison**")
+        fig_k1 = px.line(df[df['Type'] == 'K1'], x='Date', y='Free_Bins', color='WH', markers=True, color_discrete_map={'800': '#1f77b4', '820': '#ff7f0e'})
+        fig_k1.update_layout(height=450, margin=dict(l=0, r=0, t=20, b=0), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         st.plotly_chart(fig_k1, use_container_width=True)
 
-with tab_forecast:
-    st.write("**Drill-down: Category Saturation**")
-    # Horizontal bar chart for current occupancy percentage
+with tab_saturation:
+    st.markdown("**Resource Saturation by Category (%)**")
     latest_df = df[df['Date'] == latest_date].copy()
     
     def calc_occ_row(row):
-        wh = str(row['WH'])
-        t = row['Type']
-        cap = TOTAL_CAP[wh].get(t, 1) # avoid div by zero
-        return (1 - row['Free_Bins']/cap) * 100
+        wh, t = str(row['WH']), row['Type']
+        cap = TOTAL_CAP[wh].get(t, 0)
+        return (1 - (row['Free_Bins'] / cap)) * 100 if cap > 0 else 0
 
     latest_df['Occupancy %'] = latest_df.apply(calc_occ_row, axis=1)
-    fig_bar = px.bar(latest_df, x='Occupancy %', y='Type', color='WH', barmode='group',
-                     text_auto='.1f', orientation='h', title="Current Saturation by Bin Type (%)")
-    fig_bar.add_vline(x=90, line_dash="dash", line_color="red", annotation_text="Critical Threshold")
+    plot_df = latest_df[latest_df['Occupancy %'] > 0] # Filter out non-existent categories
+    
+    fig_bar = px.bar(plot_df, x='Occupancy %', y='Type', color='WH', barmode='group', text_auto='.1f', orientation='h')
+    fig_bar.add_vline(x=90, line_dash="dash", line_color="red", annotation_text="90% Limit")
     st.plotly_chart(fig_bar, use_container_width=True)
 
 with tab_mail:
-    st.write("**Auto-Generated Managerial Summary**")
-    
-    # Analyze critical items
-    critical_items = latest_df[latest_df['Occupancy %'] > 90]
-    critical_str = ""
-    if not critical_items.empty:
-        critical_str = "\nCRITICAL ALERTS (Over 90% full):\n"
-        for _, r in critical_items.iterrows():
-            critical_str += f"- WH {r['WH']} Category {r['Type']}: {r['Occupancy %']:.1f}% occupied ({r['Free_Bins']} bins left)\n"
+    st.markdown("**Automated Managerial Summary**")
+    crit = latest_df[latest_df['Occupancy %'] > 90]
+    crit_str = "\nURGENT: CRITICAL SATURATION (>90%):\n" + "\n".join([f"- WH {r['WH']} {r['Type']}: {r['Occupancy %']:.1f}% occupied ({r['Free_Bins']} bins free)" for _, r in crit.iterrows()]) if not crit.empty else ""
 
-    mail_body = f"""Subject: Warehouse Capacity & Inventory Report - {latest_date.strftime('%Y-%m-%d')}
+    mail_body = f"""Subject: Warehouse Capacity Status - {latest_date.strftime('%Y-%m-%d')}
 
 Executive Summary:
 -----------------
-Total system occupancy is currently at {total_occ:.1f}%. 
+Total system occupancy is {total_occ:.1f}%.
+- Warehouse 800: {occ800:.1f}% utilized ({free800} bins free)
+- Warehouse 820: {occ820:.1f}% utilized ({free820} bins free)
+{crit_str}
 
-Warehouse 800: {occ800:.1f}% occupied ({free800} bins free)
-Warehouse 820: {occ820:.1f}% occupied ({free820} bins free)
-{critical_str}
-Trend Analysis:
---------------
-- Shelf capacity (K1) remains stable with sufficient buffer in both facilities.
-- Pallet movements (EP series) show {'increasing' if occ800 > occ800_old else 'stable/decreasing'} pressure in the main facility.
+Operational Highlights:
+----------------------
+- Shelf locations (K1) remain within operational parameters.
+- Pallet zones (EP) show {'sustained high load' if occ800 > 85 else 'normal volatility'}.
 
-Visual analytics and historical trends are available in the live dashboard.
+Detailed analytics available in the Live Dashboard.
 
 Best regards,
-Logistics Intelligence System
+Logistics Monitoring System
 """
     st.code(mail_body, language="markdown")
-    st.info("💡 Pro-tip: Copy the code block above directly into your email client.")
+    st.info("💡 Copy the block above directly into your email body.")
