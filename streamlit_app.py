@@ -205,9 +205,27 @@ with col1:
     
     fig_ep.update_layout(title="Evolution of Pallet Positions (Details + Total)", height=400, margin=dict(l=0,r=0,t=40,b=0))
     
-    # Annotations & Markers
+    # FIXED: Separate annotation from add_vline to avoid TypeError on Timestamps
     fig_ep.add_vline(x=latest_date, line_width=2, line_dash="dot", line_color="#F4D03F")
-    fig_ep.add_annotation(x=latest_date, y=1.05, yref='paper', text="Latest Status", showarrow=False, font=dict(color="#F4D03F"))
+    
+    # Calculate percentage for the latest date for static annotation
+    latest_total_free = ep_total_df[ep_total_df['Date'] == latest_date]['Free_Bins'].values[0]
+    latest_pct_free = (latest_total_free / GRAND_TOTAL_EP_CAP) * 100
+    
+    # Add Static Annotation for Screenshot (Visible without hovering)
+    fig_ep.add_annotation(
+        x=latest_date, 
+        y=latest_total_free,
+        text=f"TOTAL: {latest_total_free} ({latest_pct_free:.1f}% Free)",
+        showarrow=True,
+        arrowhead=1,
+        ax=-100,
+        ay=-40,
+        font=dict(color="white", size=12),
+        bgcolor="#F4D03F",
+        bordercolor="white",
+        borderwidth=1
+    )
     
     st.plotly_chart(fig_ep, use_container_width=True)
 
@@ -219,6 +237,7 @@ with col2:
         fig_k1.add_trace(go.Scatter(x=sub['Date'], y=sub['Free_Bins'], name=f"{wh} K1"))
     
     fig_k1.update_layout(title="Evolution of Free Shelf Positions (K1)", height=400, margin=dict(l=0,r=0,t=40,b=0))
+    # FIXED: Separate annotation from add_vline to avoid TypeError on Timestamps
     fig_k1.add_vline(x=latest_date, line_width=2, line_dash="dot", line_color="#F4D03F")
     fig_k1.add_annotation(x=latest_date, y=1.05, yref='paper', text="Latest Status", showarrow=False, font=dict(color="#F4D03F"))
     st.plotly_chart(fig_k1, use_container_width=True)
