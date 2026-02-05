@@ -11,6 +11,13 @@ TOTAL_CAP = {
     '820': {'K1': 432, 'EP1': 0, 'EP2': 474, 'EP3': 0, 'EP4': 0}
 }
 
+# Calculate Grand Total EP Capacity (Pallets only)
+GRAND_TOTAL_EP_CAP = 0
+for wh in TOTAL_CAP:
+    for t, cap in TOTAL_CAP[wh].items():
+        if 'EP' in t:
+            GRAND_TOTAL_EP_CAP += cap
+
 # Factory Reset Data (Oct 2025 - Feb 2026)
 @st.cache_data
 def get_factory_data():
@@ -170,19 +177,38 @@ st.subheader("📊 Graphs for Export (Screenshot these)")
 col1, col2 = st.columns(2)
 
 with col1:
-    # Graf 1: Palety EP Selection (800 EP1-4 + 820 EP2)
+    # 2-in-1 Graph: Pallet Details + Total Pallet Summary
     fig_ep = go.Figure()
+    
+    # 1. Individual Lines
     for ep in ['EP1', 'EP2', 'EP3', 'EP4']:
         sub = df[(df['WH'] == '800') & (df['Type'] == ep)]
-        fig_ep.add_trace(go.Scatter(x=sub['Date'], y=sub['Free_Bins'], name=f"800 {ep}"))
+        fig_ep.add_trace(go.Scatter(x=sub['Date'], y=sub['Free_Bins'], name=f"800 {ep}", opacity=0.7))
     
     sub820ep = df[(df['WH'] == '820') & (df['Type'] == 'EP2')]
     fig_ep.add_trace(go.Scatter(x=sub820ep['Date'], y=sub820ep['Free_Bins'], name="820 EP2", line=dict(dash='dash', color='cyan')))
     
-    fig_ep.update_layout(title="Evolution of Free Pallet Positions", height=400, margin=dict(l=0,r=0,t=40,b=0))
-    # FIXED: Separate annotation from add_vline to avoid TypeError on Timestamps
+    # 2. Total Pallet Line
+    ep_total_df = df[df['Type'].str.contains('EP')].groupby('Date')['Free_Bins'].sum().reset_index()
+    
+    # Custom Hover Template displaying percentage
+    ep_total_df['Pct_Free'] = (ep_total_df['Free_Bins'] / GRAND_TOTAL_EP_CAP) * 100
+    
+    fig_ep.add_trace(go.Scatter(
+        x=ep_total_df['Date'], 
+        y=ep_total_df['Free_Bins'], 
+        name="TOTAL Pallets", 
+        line=dict(color='white', width=4),
+        hovertemplate="<b>TOTAL: %{y} free bins</b><br>Available Capacity: %{text:.1f}%<extra></extra>",
+        text=ep_total_df['Pct_Free']
+    ))
+    
+    fig_ep.update_layout(title="Evolution of Pallet Positions (Details + Total)", height=400, margin=dict(l=0,r=0,t=40,b=0))
+    
+    # Annotations & Markers
     fig_ep.add_vline(x=latest_date, line_width=2, line_dash="dot", line_color="#F4D03F")
     fig_ep.add_annotation(x=latest_date, y=1.05, yref='paper', text="Latest Status", showarrow=False, font=dict(color="#F4D03F"))
+    
     st.plotly_chart(fig_ep, use_container_width=True)
 
 with col2:
@@ -193,38 +219,6 @@ with col2:
         fig_k1.add_trace(go.Scatter(x=sub['Date'], y=sub['Free_Bins'], name=f"{wh} K1"))
     
     fig_k1.update_layout(title="Evolution of Free Shelf Positions (K1)", height=400, margin=dict(l=0,r=0,t=40,b=0))
-    # FIXED: Separate annotation from add_vline to avoid TypeError on Timestamps
     fig_k1.add_vline(x=latest_date, line_width=2, line_dash="dot", line_color="#F4D03F")
     fig_k1.add_annotation(x=latest_date, y=1.05, yref='paper', text="Latest Status", showarrow=False, font=dict(color="#F4D03F"))
     st.plotly_chart(fig_k1, use_container_width=True)
-
-# --- GRAF 3: TOTAL PALLET EVOLUTION ---
-st.divider()
-st.subheader("📈 Total Free Pallet Capacity (All Warehouses)")
-
-# Agregace dat pro graf celkových palet
-ep_df = df[df['Type'].str.contains('EP')].groupby('Date')['Free_Bins'].sum().reset_index()
-
-fig_total_ep = go.Figure()
-fig_total_ep.add_trace(go.Scatter(
-    x=ep_df['Date'], 
-    y=ep_df['Free_Bins'], 
-    mode='lines+markers',
-    name='Total Free Pallets',
-    line=dict(color='#2ECC71', width=3),
-    fill='tozeroy' # Volitelné: vyplnění oblasti pod grafem
-))
-
-fig_total_ep.update_layout(
-    title="Historical Development of Total Free Pallet Capacity (All Warehouses)",
-    height=450,
-    margin=dict(l=0,r=0,t=40,b=0),
-    xaxis_title="Date",
-    yaxis_title="Total Free Bins"
-)
-
-# Přidání svislé čáry pro aktuální datum
-fig_total_ep.add_vline(x=latest_date, line_width=2, line_dash="dot", line_color="#F4D03F")
-fig_total_ep.add_annotation(x=latest_date, y=1.05, yref='paper', text="Latest Status", showarrow=False, font=dict(color="#F4D03F"))
-
-st.plotly_chart(fig_total_ep, use_container_width=True)
