@@ -197,3 +197,34 @@ with col2:
     fig_k1.add_vline(x=latest_date, line_width=2, line_dash="dot", line_color="#F4D03F")
     fig_k1.add_annotation(x=latest_date, y=1.05, yref='paper', text="Latest Status", showarrow=False, font=dict(color="#F4D03F"))
     st.plotly_chart(fig_k1, use_container_width=True)
+
+# --- GRAF 3: TOTAL PALLET EVOLUTION ---
+st.divider()
+st.subheader("📈 Total Free Pallet Capacity (All Warehouses)")
+
+# Agregace dat pro graf celkových palet
+ep_df = df[df['Type'].str.contains('EP')].groupby('Date')['Free_Bins'].sum().reset_index()
+
+fig_total_ep = go.Figure()
+fig_total_ep.add_trace(go.Scatter(
+    x=ep_df['Date'], 
+    y=ep_df['Free_Bins'], 
+    mode='lines+markers',
+    name='Total Free Pallets',
+    line=dict(color='#2ECC71', width=3),
+    fill='tozeroy' # Volitelné: vyplnění oblasti pod grafem
+))
+
+fig_total_ep.update_layout(
+    title="Historical Development of Total Free Pallet Capacity (All Warehouses)",
+    height=450,
+    margin=dict(l=0,r=0,t=40,b=0),
+    xaxis_title="Date",
+    yaxis_title="Total Free Bins"
+)
+
+# Přidání svislé čáry pro aktuální datum
+fig_total_ep.add_vline(x=latest_date, line_width=2, line_dash="dot", line_color="#F4D03F")
+fig_total_ep.add_annotation(x=latest_date, y=1.05, yref='paper', text="Latest Status", showarrow=False, font=dict(color="#F4D03F"))
+
+st.plotly_chart(fig_total_ep, use_container_width=True)
