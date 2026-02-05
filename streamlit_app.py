@@ -234,7 +234,7 @@ with col1:
         x=sub820ep['Date'], y=sub820ep['Free_Bins'], 
         name="820 EP2", 
         mode='lines+markers',
-        line=dict(width=2, dash='dash', color=COLORS['820 EP2']),
+        line=dict(width=2, color=COLORS['820 EP2']), # SOLID LINE (No Dash)
         marker=dict(size=6, symbol='diamond')
     ))
     
