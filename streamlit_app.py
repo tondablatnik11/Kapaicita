@@ -96,13 +96,42 @@ def format_type_line(wh, type_name, label):
     occ_pct = (1 - free/cap) * 100
     return f"- {type_name} ({label}): {free} free out of {cap} ({occ_pct:.1f}% occupied)"
 
+# --- AGGREGATE STATS CALCULATION ---
+# Total Pallets (EP)
+ep_cap_800 = sum([TOTAL_CAP['800'][k] for k in TOTAL_CAP['800'] if 'EP' in k])
+ep_free_800 = latest_df[(latest_df['WH']=='800') & (latest_df['Type'].str.contains('EP'))]['Free_Bins'].sum()
+
+ep_cap_820 = sum([TOTAL_CAP['820'][k] for k in TOTAL_CAP['820'] if 'EP' in k])
+ep_free_820 = latest_df[(latest_df['WH']=='820') & (latest_df['Type'].str.contains('EP'))]['Free_Bins'].sum()
+
+total_ep_cap = ep_cap_800 + ep_cap_820
+total_ep_free = ep_free_800 + ep_free_820
+total_ep_occ = (1 - total_ep_free/total_ep_cap)*100 if total_ep_cap > 0 else 0
+
+# Total KLT (K1)
+k1_cap_800 = TOTAL_CAP['800']['K1']
+k1_free_800_series = latest_df[(latest_df['WH']=='800') & (latest_df['Type']=='K1')]['Free_Bins']
+k1_free_800 = k1_free_800_series.values[0] if not k1_free_800_series.empty else 0
+
+k1_cap_820 = TOTAL_CAP['820']['K1']
+k1_free_820_series = latest_df[(latest_df['WH']=='820') & (latest_df['Type']=='K1')]['Free_Bins']
+k1_free_820 = k1_free_820_series.values[0] if not k1_free_820_series.empty else 0
+
+total_k1_cap = k1_cap_800 + k1_cap_820
+total_k1_free = k1_free_800 + k1_free_820
+total_k1_occ = (1 - total_k1_free/total_k1_cap)*100 if total_k1_cap > 0 else 0
+
 # Construct the email body
 email_body = f"""Subject: Warehouse Capacity Status - {latest_date.strftime('%Y-%m-%d')}
 
-Dear Manager,
+Hello Team,
 
-Please find the current warehouse capacity overview. 
-Specific counts of free bins are listed below for each warehouse.
+Here is the current overview of free warehouse positions.
+
+Global Category Statistics:
+---------------------------
+- Pallet Positions (EP): {total_ep_free} free out of {total_ep_cap} ({total_ep_occ:.1f}% occupied)
+- KLT Positions (K1): {total_k1_free} free out of {total_k1_cap} ({total_k1_occ:.1f}% occupied)
 
 Warehouse 800 Status:
 ---------------------
